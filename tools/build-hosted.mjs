@@ -11,6 +11,8 @@ const share = shareUrl ? ` window.RICOCHET_SHARE_URL = ${JSON.stringify(shareUrl
 const head = `<script>window.RICOCHET_PACKED = true;${share}</script>\n`
   + '<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>\n';
 let html = fs.readFileSync(path.join(src, 'index.html'), 'utf8');
+// the artifact host handles versions itself: swap the website's release block for a plain entry point
+html = html.replace(/<!-- release:start[\s\S]*?<!-- release:end -->/, '<script type="module" src="js/main.js"></script>');
 if (!html.includes('<script type="module"')) throw new Error('module script tag not found');
 // the artifact host wraps the page in its own document, so drop ours
 html = html.replace(/^\s*<!doctype html>\s*<html[^>]*>\s*<head>\s*<meta charset="utf-8">\s*<meta name="viewport"[^>]*>\s*/i, '')

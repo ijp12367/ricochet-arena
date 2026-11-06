@@ -596,6 +596,27 @@
   <button type="button" id="touch-mine">MINE</button>
 </div>
 
-<script type="module" src="js/main.js"></script>
+<!-- release:start (written by tools/stamp-version.mjs) -->
+<script>window.RICOCHET_VERSION = '20261106-225706';</script>
+<script type="importmap">{"imports":{"./js/ai.js":"./js/ai.js?v=20261106-225706","./js/assets.js":"./js/assets.js?v=20261106-225706","./js/audio.js":"./js/audio.js?v=20261106-225706","./js/config.js":"./js/config.js?v=20261106-225706","./js/effects.js":"./js/effects.js?v=20261106-225706","./js/hud.js":"./js/hud.js?v=20261106-225706","./js/input.js":"./js/input.js?v=20261106-225706","./js/main.js":"./js/main.js?v=20261106-225706","./js/mp.js":"./js/mp.js?v=20261106-225706","./js/mpui.js":"./js/mpui.js?v=20261106-225706","./js/net.js":"./js/net.js?v=20261106-225706","./js/projectiles.js":"./js/projectiles.js?v=20261106-225706","./js/tank.js":"./js/tank.js?v=20261106-225706","./js/utils.js":"./js/utils.js?v=20261106-225706","./js/world.js":"./js/world.js?v=20261106-225706"}}</script>
+<script>
+  // A page older than the site's current release reloads itself at a new address,
+  // which skips the stale copy the browser cached.
+  (function () {
+    if (location.protocol === 'file:' || window.RICOCHET_PACKED) return;
+    fetch('version.json?t=' + Date.now(), { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (!d || !d.v || d.v === window.RICOCHET_VERSION) return;
+        var q = new URLSearchParams(location.search);
+        if (q.get('v') === d.v) return;
+        q.set('v', d.v);
+        location.replace(location.pathname + '?' + q.toString() + location.hash);
+      })
+      .catch(function () {});
+  })();
+</script>
+<script type="module">import './js/main.js';</script>
+<!-- release:end -->
 </body>
 </html>

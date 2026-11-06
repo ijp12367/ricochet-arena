@@ -87,10 +87,14 @@ PLAYING WITH FRIENDS
      that drops friends straight into your lobby. No accounts or downloads needed to play.
      This folder is that website's repository (github.com/ijp12367/ricochet-arena). To update
      the site after changing files, run in this folder:
+       node tools/stamp-version.mjs
        git add -A
        git commit -m "Describe the change"
        git push
-     GitHub republishes it within a minute or two.
+     GitHub republishes it within a minute or two. The stamp step gives the release a new
+     version number: browsers keep the site's files for up to 10 minutes, and without it
+     players could keep running the old version (or a broken mix of old and new files).
+     With it, anyone who opens or reloads the page gets the new version straight away.
 
 
 LOBBY SETTINGS (host)
