@@ -70,7 +70,11 @@ export class Input {
     } catch { this.lockFailed = true; }
   }
 
-  releaseLock() { if (document.pointerLockElement) document.exitPointerLock(); }
+  releaseLock() {
+    if (!document.pointerLockElement) return;
+    this.releasedAt = performance.now();   // lets the game tell this apart from the player pressing Esc
+    document.exitPointerLock();
+  }
 
   key(code) { return this.keys.has(code); }
   hit(code) { return this.pressed.has(code); }

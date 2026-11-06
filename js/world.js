@@ -84,6 +84,72 @@ export class World {
     });
   }
 
+  // Open cells where a tank can spawn: the cell and all 8 neighbours are drivable.
+  spawnCandidates() {
+    const out = [];
+    for (let cz = 1; cz < this.H - 1; cz++) for (let cx = 1; cx < this.W - 1; cx++) {
+      let open = true;
+      for (let dz = -1; dz <= 1 && open; dz++) for (let dx = -1; dx <= 1; dx++) if (!this.walkable(cx + dx, cz + dz)) { open = false; break; }
+      if (open) out.push({ x: this.centerX(cx), z: this.centerZ(cz) });
+    }
+    return out;
+  }
+
+  // Spawn points for a multiplayer round: as far apart as possible, and never in plain
+  // sight of a rival if the map allows it. `teams[i]` is spawn i's team (null for free-for-all).
+  pickSpawns(count, seed, teams = null) {
+    const rng = mulberry32((seed ^ 0x5bd1e995) >>> 0);
+    const cand = this.spawnCandidates();
+    if (!cand.length) return this.multiSpawns().slice(0, count);
+    const chosen = [];
+    const side = (c, t) => (t === 0 ? c.x < -this.HW * 0.25 : c.x > this.HW * 0.25);
+    for (let i = 0; i < count; i++) {
+      const team = teams ? teams[i] : null;
+      let pool = team == null ? cand : cand.filter((c) => side(c, team));
+      if (!pool.length) pool = cand;
+      if (!chosen.length) { // first spawn: somewhere out toward the edge of the arena
+        const far = pool.slice().sort((a, b) => (b.x ** 2 + b.z ** 2) - (a.x ** 2 + a.z ** 2));
+        chosen.push({ ...far[Math.floor(rng() * Math.max(1, Math.floor(far.length * 0.3)))], team });
+        continue;
+      }
+      chosen.push({ ...this.bestSpot(pool, chosen.filter((c) => team == null || c.team !== team), chosen, rng), team });
+    }
+    return chosen.map((c) => ({ x: c.x, z: c.z, yaw: Math.atan2(-c.x, -c.z) }));
+  }
+
+  // Where to respawn: far from living enemies and out of their sight.
+  pickRespawn(enemies, others) {
+    const cand = this.spawnCandidates();
+    if (!cand.length) return this.multiSpawns()[0];
+    const c = this.bestSpot(cand, enemies, others, Math.random);
+    return { x: c.x, z: c.z, yaw: Math.atan2(-c.x, -c.z) };
+  }
+
+  // Score = distance to the nearest rival, minus a heavy penalty per rival with a clear view.
+  // Candidates are checked nearest-score-first so most line-of-sight tests are skipped.
+  bestSpot(pool, rivals, everyone, rng) {
+    const scored = [];
+    for (const c of pool) {
+      let near = Infinity, crowd = Infinity;
+      for (const r of rivals) near = Math.min(near, Math.hypot(r.x - c.x, r.z - c.z));
+      for (const o of everyone) crowd = Math.min(crowd, Math.hypot(o.x - c.x, o.z - c.z));
+      if (crowd < 6) continue; // never on top of anyone
+      if (!rivals.length) near = Math.min(crowd, 14);
+      scored.push({ c, base: near + rng() * 0.6 });
+    }
+    if (!scored.length) return pool[Math.floor(rng() * pool.length)];
+    scored.sort((a, b) => b.base - a.base);
+    let best = null, bestScore = -Infinity;
+    for (const s of scored) {
+      if (s.base <= bestScore) break;
+      let seen = 0;
+      for (const r of rivals) if (this.lineClear(s.c.x, s.c.z, r.x, r.z, blocksSight)) seen++;
+      const score = s.base - seen * 40;
+      if (score > bestScore) { bestScore = score; best = s.c; }
+    }
+    return best || scored[0].c;
+  }
+
   tryGenerate(rng, attempt, multi) {
     const { W, H } = this;
     const g = new Uint8Array(W * H);

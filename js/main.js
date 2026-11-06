@@ -5,7 +5,7 @@ import { RenderPass } from '../vendor/three/examples/jsm/postprocessing/RenderPa
 import { UnrealBloomPass } from '../vendor/three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from '../vendor/three/examples/jsm/postprocessing/OutputPass.js';
 import { assets, loadAssets } from './assets.js';
-import { World } from './world.js';
+import { World, blocksSight } from './world.js';
 import { Tank } from './tank.js';
 import { Projectiles } from './projectiles.js';
 import { Bot } from './ai.js';
@@ -378,12 +378,16 @@ class Game {
     if (this.player.bumped) this.audio.play('tank_bump', { volume: 0.35 });
     this.projectiles.update(dt);
     this.effects.update(dt);
+    this.updateSpectate(real);
     this.updateCamera(dt, real);
     this.updateAimDots();
     const ta = mp.tally();
-    this.hud.setMatch({ you: ta.you, bot: ta.bot, youLabel: ta.youLabel, botName: ta.botName,
+    const ffa = !mp.settings.tm;
+    this.hud.setMatch({ you: ta.you, bot: ta.bot, youLabel: ta.youLabel, botName: ta.botName, ffa,
       round: mp.settings.md ? 'DEATHMATCH' : `ROUND ${mp.round}`,
       mode: mp.settings.md ? `FIRST TO ${mp.settings.kl} KILLS` : `FIRST TO ${mp.settings.rw} ROUNDS` });
+    // everyone's score: free-for-all, and team deathmatch where individual kills count
+    this.hud.setBoard(ffa || mp.settings.md ? mp.standings() : null, mp.settings.md ? 'kills' : 'rounds');
     this.hud.update(real, this);
     this.mpUi.update(real);
     const cam = this.camera;
@@ -622,11 +626,56 @@ class Game {
     }
   }
 
+  // After dying in a last-tank-standing round (or while waiting to join), follow living players.
+  // Click, Space, E or the right arrow cycles forward; Q or the left arrow goes back.
+  updateSpectate(real) {
+    const mp = this.mp, me = this.player, inp = this.input;
+    const waiting = mp.inGame && !mp.hasSlot();
+    const outOfRound = mp.inGame && mp.hasSlot() && !me.alive && !mp.settings.md;
+    if (me.alive && mp.hasSlot()) this.deadFor = 0;
+    else this.deadFor = (this.deadFor || 0) + real;
+    let target = null;
+    if ((waiting || outOfRound) && (waiting || this.deadFor > 2.2)) {
+      const live = [...mp.tanks.entries()].filter(([, t]) => t.alive && t !== me).sort((a, b) => a[0] - b[0]);
+      const cur = this.spectating && mp.tanks.get(this.spectating.slot);
+      // stay on someone who just died for a moment, so you see what happened
+      if (cur && !cur.alive && (this.spectating.lost = (this.spectating.lost || 0) + real) < 1.6) target = this.spectating.slot;
+      else if (live.length) {
+        let i = live.findIndex(([s]) => this.spectating && s === this.spectating.slot);
+        const typing = this.mpUi.chatting;
+        if (i < 0) i = 0;
+        else if (!typing && (inp.firePressed || inp.hit('Space') || inp.hit('KeyE') || inp.hit('ArrowRight'))) i = (i + 1) % live.length;
+        else if (!typing && (inp.hit('KeyQ') || inp.hit('ArrowLeft'))) i = (i - 1 + live.length) % live.length;
+        target = live[i][0];
+      }
+    }
+    if (target == null) this.spectating = null;
+    else if (!this.spectating || this.spectating.slot !== target) this.spectating = { slot: target, lost: 0 };
+    const label = this.spectating ? mp.nameOf(this.spectating.slot) : null;
+    this.hud.setSpectate(label, waiting ? 'You join at the next round' : 'Click or Space for the next player');
+  }
+
   updateCamera(dt, real) {
     const cam = this.camera, me = this.player, st = this.state;
     let fov = this.settings.fov;
-    const spectating = st === 'mp' && this.mp && !this.mp.hasSlot();
-    if (st === 'menu' || st === 'results' || (st === 'transition' && this.round === 0) || spectating) {
+    const follow = st === 'mp' && this.spectating && this.mp && this.mp.tanks.get(this.spectating.slot);
+    const waiting = st === 'mp' && this.mp && !this.mp.hasSlot();
+    if (follow) {
+      // chase camera behind the followed tank's turret, pulled in front of any wall in the way
+      const t = follow, yaw = t.turretYaw;
+      let back = 6.4;
+      for (let d = 0.5; d <= back; d += 0.25) {
+        if (blocksSight(this.world.cellAtWorld(t.x - Math.sin(yaw) * d, t.z - Math.cos(yaw) * d))) { back = Math.max(1.2, d - 0.6); break; }
+      }
+      const { HW, HH } = this.world;
+      const tx = clamp(t.x - Math.sin(yaw) * back, -HW + 0.6, HW - 0.6), tz = clamp(t.z - Math.cos(yaw) * back, -HH + 0.6, HH - 0.6);
+      _dir.set(tx, back < 3 ? 4.6 : 3.3, tz);
+      const k = 1 - Math.exp(-real * 6);
+      if (cam.position.distanceTo(_dir) > 25) cam.position.copy(_dir); else cam.position.lerp(_dir, k);
+      cam.lookAt(t.x + Math.sin(yaw) * 5, 0.8, t.z + Math.cos(yaw) * 5);
+      fov = 64;
+      this.deathCam = null;
+    } else if (st === 'menu' || st === 'results' || (st === 'transition' && this.round === 0) || waiting) {
       this.orbit += real * 0.045;
       const R = Math.max(30, this.world.HW * 1.45);
       cam.position.set(Math.sin(this.orbit) * R, 15.5, Math.cos(this.orbit) * R * 0.78);
@@ -778,7 +827,9 @@ class Game {
         return;
       }
       this.unlockedAt = performance.now();
-      if (this.inMatch() && !this.paused) this.pause();
+      // only the player pressing Esc pauses; the game letting go of the mouse (results, lobby) does not
+      const ours = performance.now() - (this.input.releasedAt || 0) < 600;
+      if (this.inMatch() && !this.paused && !ours && $('results').hidden) this.pause();
     };
     this.canvas.addEventListener('click', () => { if (this.inMatch() && !this.paused) this.input.requestLock(); });
     addEventListener('keydown', (e) => {
@@ -786,7 +837,7 @@ class Game {
       // Esc that just released the mouse already paused the game; don't toggle it straight back
       const justUnlocked = performance.now() - (this.unlockedAt || 0) < 400;
       const menuOpen = this.paused || !$('pause').hidden;
-      if (e.code === 'Escape' && this.inMatch() && !this.input.locked && !justUnlocked) { if (menuOpen) this.resume(); else this.pause(); }
+      if (e.code === 'Escape' && this.inMatch() && !this.input.locked && !justUnlocked && $('results').hidden) { if (menuOpen) this.resume(); else this.pause(); }
       if (e.code === 'KeyH' && this.inMatch()) $('hint').classList.toggle('show');
     });
     // a multiplayer match keeps running for everyone else, so only single player pauses on tab switch

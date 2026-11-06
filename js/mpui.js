@@ -7,12 +7,12 @@ const $ = (id) => document.getElementById(id);
 const hex = (c) => '#' + c.toString(16).padStart(6, '0');
 
 const SETTINGS_UI = [
-  { key: 'sz', label: 'Arena size', type: 'select', str: true, options: [['small', 'Small'], ['medium', 'Medium'], ['large', 'Large'], ['huge', 'Huge']] },
+  { key: 'sz', label: 'Arena size', type: 'select', str: true, options: [['auto', 'Auto (grows with players)'], ['small', 'Small'], ['medium', 'Medium'], ['large', 'Large'], ['huge', 'Huge'], ['massive', 'Massive'], ['colossal', 'Colossal']] },
   { key: 'md', label: 'Mode', type: 'select', options: [[0, 'Last tank standing'], [1, 'Deathmatch (respawns)']] },
   { key: 'tm', label: 'Teams', type: 'select', options: [[0, 'Free for all'], [1, 'Blue vs Red']] },
   { key: 'rw', label: 'Rounds to win', type: 'range', min: 1, max: 10, step: 1, show: (s) => !s.md },
   { key: 'kl', label: 'Kill limit', type: 'range', min: 3, max: 40, step: 1, show: (s) => !!s.md },
-  { key: 'cd', label: 'Shot delay', type: 'range', min: 0.1, max: 2, step: 0.05, fmt: (v) => v.toFixed(2) + ' s' },
+  { key: 'cd', label: 'Shot delay', type: 'range', min: 0.1, max: 3, step: 0.05, fmt: (v) => v.toFixed(2) + ' s' },
   { key: 'ms', label: 'Shells in the air', type: 'range', min: 1, max: 8, step: 1 },
   { key: 'bn', label: 'Ricochets per shell', type: 'range', min: 0, max: 3, step: 1 },
   { key: 'ss', label: 'Shell speed', type: 'select', options: [[0, 'Slow'], [1, 'Normal'], [2, 'Fast'], [3, 'Rocket']] },
@@ -179,20 +179,25 @@ export class MpUi {
 
   showResults(rows, title) {
     const mp = this.game.mp;
+    // the pause menu may still be open from the match; the results replace it
+    $('pause').hidden = true;
+    $('menu-settings-slot').append($('settings'));
+    this.closeChat();
     $('results-title').textContent = title.big;
     $('results-sub').textContent = title.small;
     const st = mp ? mp.settings : DEFAULT_SETTINGS;
     $('results-stats').innerHTML = '';
-    for (const r of rows.slice(0, 8)) {
+    rows.slice(0, 8).forEach((r, i) => {
       const d = document.createElement('div');
+      if (r.me) d.className = 'me';
       const dt = document.createElement('dt');
-      dt.textContent = r.name + (r.me ? ' (you)' : '');
+      dt.textContent = `${i + 1}. ${r.name}${r.me ? ' (you)' : ''}`;
       dt.style.color = hex(r.color);
       const dd = document.createElement('dd');
-      dd.textContent = st.md ? `${r.score} kills` : `${r.score} round${r.score === 1 ? '' : 's'}`;
+      dd.textContent = st.md ? `${r.score} kill${r.score === 1 ? '' : 's'}` : `${r.score} round${r.score === 1 ? '' : 's'}`;
       d.append(dt, dd);
       $('results-stats').append(d);
-    }
+    });
     const host = mp && mp.isHost;
     $('rematch').hidden = true; $('to-menu').hidden = true;
     $('results-again').hidden = !host; $('results-lobby').hidden = !host; $('results-leave').hidden = false;
@@ -239,7 +244,7 @@ export class MpUi {
     this.busy(true, 'Creating a lobby…');
     try {
       const { net, code } = await this.openNet(null, true);
-      this.game.startMp(net, { code, isHost: true, name: this.name, color: this.color, settings: store.get('ricochet-lobby', null) });
+      this.game.startMp(net, { code, isHost: true, name: this.name, color: this.color, settings: store.get('ricochet-lobby-v2', null) });
       this.showLobby();
     } catch (e) { $('mp-status').textContent = e.message || 'Could not create a lobby.'; }
     this.busy(false);
@@ -320,7 +325,7 @@ export class MpUi {
         const v = read();
         if (out) out.textContent = def.fmt ? def.fmt(v) : String(v);
         mp.setSettings({ [def.key]: v });
-        store.set('ricochet-lobby', mp.settings);
+        store.set('ricochet-lobby-v2', mp.settings);
       });
       this.settingEls[def.key] = { def, row, input, out };
     }

@@ -19,7 +19,7 @@ CONTROLS
   Mouse ............ turn the turret and look (click the game once to capture the mouse)
   W A S D .......... drive. By default the tank drives toward where you look;
                      switch to "Classic tank" in Settings for A/D hull turning
-  Left click / F ... fire a shell
+  Left click / F ... fire a shell (one shot per second by default)
   Space / E ........ drop a mine
   Right click ...... zoom the sight
   T ................ aim line on or off (shows the shell path and its first bounce)
@@ -28,6 +28,8 @@ CONTROLS
   Tab (hold) ....... scoreboard (multiplayer)
   H ................ show the controls during a match
   Esc .............. pause menu (in multiplayer the match keeps running)
+  Spectating ....... after you're knocked out of a round: click, Space or E for the
+                     next player, Q or the left arrow for the previous one
 
 
 RULES
@@ -42,7 +44,8 @@ RULES
 SOLO MODES
   Duel ...... pick the bot's difficulty (Recruit, Regular, Veteran, Ace). First to 5 rounds wins.
   Gauntlet .. every level brings a different, tougher bot. You have three lives.
-  Arena size  Small, Medium, Large or Huge. The menu's background previews the size.
+  Arena size  Small, Medium, Large, Huge, Massive or Colossal. The menu's background
+              previews the size.
 
 
 PLAYING WITH FRIENDS
@@ -54,6 +57,11 @@ PLAYING WITH FRIENDS
 
   The host's game runs the match. If the host leaves, the match ends for everyone.
   Minimising the host's window is fine; closing it is not.
+  A player whose connection goes quiet for 5 seconds is removed, tank and all.
+
+  During a match: the leaderboard (top left) ranks every tank. When you're knocked out
+  of a round you spectate the players still fighting until the next round starts.
+  Spawn points are picked on each new map: spread out, and out of sight of rivals.
 
   There are three ways to get your friends in (option 3, the website, is the easiest):
 
@@ -86,11 +94,12 @@ PLAYING WITH FRIENDS
 
 
 LOBBY SETTINGS (host)
-  Arena size .............. Small, Medium, Large or Huge
+  Arena size .............. Auto (default: bigger as more tanks join), or Small, Medium,
+                            Large, Huge, Massive, Colossal
   Mode .................... Last tank standing (rounds) or Deathmatch (respawn after 3 s)
   Teams ................... Free for all, or Blue vs Red (with optional friendly fire)
   Rounds to win / Kill limit
-  Shot delay .............. seconds between shots (0.10 to 2.00)
+  Shot delay .............. seconds between shots (0.10 to 3.00, default 1.00)
   Shells in the air ....... how many of your shells can be flying at once (1 to 8)
   Ricochets per shell ..... 0 to 3
   Shell speed ............. Slow, Normal, Fast or Rocket

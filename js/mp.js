@@ -8,7 +8,7 @@
 // Rings carry increasing ids, so a dropped update never loses a shot, a kill or a chat line.
 import { Tank } from './tank.js';
 import { Bot } from './ai.js';
-import { PLAYER, BOTS } from './config.js';
+import { PLAYER, BOTS, SIZES, autoSize } from './config.js';
 import { wrapAngle } from './utils.js';
 
 export const PALETTE = [0x5f7f3a, 0x3e6db5, 0xb23b2e, 0xd1a12f, 0x7a4bb0, 0x2f9e9a, 0xd06a28, 0xd8d4c8];
@@ -20,7 +20,7 @@ export const DEFAULT_SETTINGS = {
   tm: 0,          // 0 free-for-all, 1 two teams
   rw: 5,          // round wins needed
   kl: 15,         // kill limit (deathmatch)
-  cd: 0.24,       // shot delay, seconds
+  cd: 1.0,        // shot delay, seconds
   ms: 5,          // shells in the air per tank
   bn: 1,          // ricochets per shell
   ss: 1,          // shell speed index
@@ -32,15 +32,13 @@ export const DEFAULT_SETTINGS = {
   nb: 0,          // bots
   bd: 'regular',  // bot difficulty
   vs: 1,          // tank speed multiplier
-  sz: 'medium',   // arena size (see SIZES in config.js)
+  sz: 'auto',     // arena size: 'auto' grows with the tank count, or a key of SIZES
 };
 export const SHELL_SPEEDS = [8, 11.5, 16, 22];
 const MAX_TANKS = 8;
 const COUNTDOWN = 3.2, ROUND_OVER = 3.6, RESPAWN = 3;
 const INTERP_DELAY = 110; // ms behind the newest sample
 const BOT_MODELS = ['desert', 'scout', 'heavy'];
-const SPAWN_ORDER_FFA = [0, 1, 2, 3, 6, 7, 4, 5];
-const SPAWN_TEAM = [[6, 0, 3, 4], [7, 1, 2, 5]];
 
 const r2 = (v) => Math.round(v * 100);
 const r3 = (v) => Math.round(v * 1000);
@@ -124,6 +122,21 @@ export class MpSession {
     return 'Tank';
   }
   colorOf(slot) { const H = this.hostState()?.H; return H?.cl?.[slot] ?? PALETTE[slot % PALETTE.length]; }
+
+  // The arena size this match uses ('auto' grows with the number of tanks).
+  sizeKey(H = this.hostState()?.H) {
+    const sz = this.settings.sz;
+    if (SIZES[sz]) return sz;
+    const tanks = H ? Object.keys(H.sl || {}).length + Object.keys(H.bo || {}).length : 2;
+    return autoSize(tanks);
+  }
+
+  // Spawn pose for a slot: the host's chosen spot for this life.
+  spawnOf(H, slot) {
+    const p = H.ps && H.ps[slot];
+    if (p) return { x: p[0] / 100, z: p[1] / 100, yaw: p[2] / 1000 };
+    return (this.spawns && this.spawns[0]) || { x: 0, z: 0, yaw: 0 };
+  }
 
   canDamage(a, b) {
     if (!a || !b || a === b || !this.settings.tm || this.settings.ff) return true;
@@ -214,21 +227,22 @@ export class MpSession {
     if (!this.inGame) { this.inGame = true; g.enterMpMatch(); }
     g.effects.clear();
     g.projectiles.clear();
-    g.useSize(this.settings.sz);
+    g.useSize(this.sizeKey(H));
     this.spawns = g.world.generateMulti(H.sd);
     g.world.build();
     this.syncRoster(H);
     for (const [slot, t] of this.tanks) {
-      const sp = this.spawns[H.sp?.[slot] ?? 0];
+      const sp = this.spawnOf(H, slot);
       t.reset(sp.x, sp.z, sp.yaw);
       this.lives[slot] = H.lf?.[slot] ?? 0;
       this.remote.delete(slot);
     }
     const mine = this.mySlot;
     if (mine != null) {
-      const sp = this.spawns[H.sp?.[mine] ?? 0];
+      const sp = this.spawnOf(H, mine);
       g.lookYaw = sp.yaw; g.lookPitch = -0.04; g.deathCam = null;
     }
+    g.spectating = null;
     for (const b of this.bots) b.ai.reset();
     this.lastCount = 9;
     if (!this.isHost) this.phaseLeft = COUNTDOWN;
@@ -258,7 +272,7 @@ export class MpSession {
         if (t !== g.player) g.scene.add(t.root);
         this.tanks.set(slot, t);
         // joined mid-round (deathmatch): put it at its spawn right away
-        const sp = this.spawns && this.spawns[H.sp?.[slot] ?? 0];
+        const sp = H.ps && H.ps[slot] ? this.spawnOf(H, slot) : null;
         if (sp && this.round) {
           t.reset(sp.x, sp.z, sp.yaw);
           this.lives[slot] = H.lf?.[slot] ?? 0;
@@ -333,7 +347,7 @@ export class MpSession {
       const life = H.lf?.[slot] ?? 0;
       if (life !== (this.lives[slot] ?? 0)) {
         this.lives[slot] = life;
-        const sp = this.spawns[H.sp?.[slot] ?? 0];
+        const sp = this.spawnOf(H, slot);
         t.reset(sp.x, sp.z, sp.yaw);
         this.remote.delete(slot);
         if (t === this.game.player) { this.game.lookYaw = sp.yaw; this.game.deathCam = null; this.game.hud.feed('Respawned'); }
@@ -645,16 +659,17 @@ export class MpSession {
     H.sd = (Math.random() * 2 ** 31) | 0;
     H.ph = 'cd';
     H.wn = null;
-    H.lf = {}; H.al = {}; H.sp = {};
+    H.lf = {}; H.al = {};
     const slots = this.allSlots();
-    if (this.settings.tm) {
-      const next = [0, 0];
-      for (const s of slots) { const tm = H.tm[s] ?? 0; H.sp[s] = SPAWN_TEAM[tm][next[tm]++ % 4]; }
-    } else {
-      const order = slots.length <= 2 ? [6, 7] : SPAWN_ORDER_FFA;
-      slots.forEach((s, i) => { H.sp[s] = order[(i + rd - 1) % order.length]; });
-    }
     for (const s of slots) { H.lf[s] = 0; H.al[s] = 1; }
+    // generate this round's arena here too, so spawns can be chosen on the real map
+    const g = this.game;
+    g.useSize(this.sizeKey(H));
+    g.world.generateMulti(H.sd);
+    const order = slots.slice().sort((a, b) => a - b);
+    const picks = g.world.pickSpawns(order.length, H.sd, this.settings.tm ? order.map((s) => H.tm[s] ?? 0) : null);
+    H.ps = {};
+    order.forEach((s, i) => { H.ps[s] = [r2(picks[i].x), r2(picks[i].z), r3(picks[i].yaw)]; });
     this.alive = new Set(slots);
     this.respawnAt.clear();
     this.phaseLeft = COUNTDOWN;
@@ -724,7 +739,7 @@ export class MpSession {
           this.respawnAt.delete(slot);
           if (!this.allSlots().includes(slot)) continue;
           H.lf[slot] = (H.lf[slot] || 0) + 1;
-          H.sp[slot] = this.safestSpawn(slot);
+          H.ps[slot] = this.safestSpawn(slot);
           H.al[slot] = 1;
           this.alive.add(slot);
           this.publishHost();
@@ -757,21 +772,18 @@ export class MpSession {
     if (Object.keys(H.sl).length === before) return;
     for (const slot of Object.values(H.sl)) {
       if (H.lf[slot] != null) continue;
-      H.lf[slot] = 0; H.sp[slot] = this.safestSpawn(slot); H.al[slot] = 1;
+      H.lf[slot] = 0; H.ps[slot] = this.safestSpawn(slot); H.al[slot] = 1;
       this.alive.add(slot);
     }
     this.publishHost();
   }
 
   safestSpawn(slot) {
-    const spawns = this.spawns || this.game.world.multiSpawns();
-    let best = 0, bestD = -1;
-    spawns.forEach((sp, i) => {
-      let d = Infinity;
-      for (const t of this.game.tanks) if (t.alive && t.slot !== slot) d = Math.min(d, Math.hypot(t.x - sp.x, t.z - sp.z));
-      if (d > bestD) { bestD = d; best = i; }
-    });
-    return best;
+    const me = this.tanks.get(slot);
+    const live = this.game.tanks.filter((t) => t.alive && t.slot !== slot);
+    const rivals = live.filter((t) => !me || this.canDamage(me, t));
+    const sp = this.game.world.pickRespawn(rivals, live);
+    return [r2(sp.x), r2(sp.z), r3(sp.yaw)];
   }
 
   // Called by the game when the host's projectiles destroy a tank.

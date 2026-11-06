@@ -15,7 +15,11 @@ export class Hud {
       threats: $('threats'), hull: $('hull-icon'),
       banner: $('banner'), bannerBig: $('banner-big'), bannerSmall: $('banner-small'), feed: $('feed'), fade: $('fade'),
       hint: $('hint'), cross: $('crosshair'), lives: $('lives'),
+      tally: document.querySelector('.tally'), board: $('board'), boardList: $('board-list'),
+      spec: $('spectate'), specName: $('spectate-name'), specHint: $('spectate-hint'),
     };
+    this.boardKey = '';
+    this.specKey = '';
     this.bannerT = 0;
     this.threatEls = [];
     this.markEls = [];
@@ -26,10 +30,12 @@ export class Hud {
 
   show(on) { this.el.hud.hidden = !on; }
 
-  setMatch({ you, bot, round, botName, mode, lives, youLabel = 'YOU' }) {
-    const key = [you, bot, round, botName, mode, lives, youLabel].join('|');
+  setMatch({ you, bot, round, botName, mode, lives, youLabel = 'YOU', ffa = false }) {
+    const key = [you, bot, round, botName, mode, lives, youLabel, ffa].join('|');
     if (key === this.matchKey) return;
     this.matchKey = key;
+    // free-for-all shows every player on the leaderboard instead of a two-sided score
+    this.el.tally.classList.toggle('ffa', ffa);
     this.el.you.textContent = you;
     this.el.bot.textContent = bot;
     this.el.round.textContent = round;
@@ -40,6 +46,38 @@ export class Hud {
       this.el.lives.hidden = false;
       this.el.lives.innerHTML = Array.from({ length: 3 }, (_, i) => `<i class="${i < lives ? 'on' : ''}"></i>`).join('');
     } else this.el.lives.hidden = true;
+  }
+
+  // Ranked list of every tank in the match, or hidden when rows is null.
+  setBoard(rows, unit) {
+    const key = rows ? unit + JSON.stringify(rows.map((r) => [r.name, r.score, r.me, r.alive, r.color])) : '';
+    if (key === this.boardKey) return;
+    this.boardKey = key;
+    this.el.board.hidden = !rows;
+    if (!rows) return;
+    const list = this.el.boardList;
+    list.replaceChildren();
+    rows.forEach((r, i) => {
+      const li = document.createElement('li');
+      if (r.me) li.className = 'me';
+      if (!r.alive) li.classList.add('down');
+      const rank = document.createElement('span'); rank.className = 'rk'; rank.textContent = String(i + 1);
+      const dot = document.createElement('i'); dot.className = 'dot'; dot.style.background = hex(r.color);
+      const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = r.name + (r.me ? ' (you)' : '');
+      const sc = document.createElement('b'); sc.textContent = String(r.score);
+      li.append(rank, dot, nm, sc);
+      list.append(li);
+    });
+    this.el.board.dataset.unit = unit;
+  }
+
+  setSpectate(name, hint) {
+    const key = name ? name + '|' + hint : '';
+    if (key === this.specKey) return;
+    this.specKey = key;
+    this.el.spec.hidden = !name;
+    document.body.classList.toggle('spectating', !!name);
+    if (name) { this.el.specName.textContent = name; this.el.specHint.textContent = hint; }
   }
 
   banner(big, small = '', time = 2, tone = '') {

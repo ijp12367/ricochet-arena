@@ -9,7 +9,14 @@ export const SIZES = {
   medium: { w: 20, h: 14, label: 'Medium' },
   large: { w: 26, h: 18, label: 'Large' },
   huge: { w: 32, h: 22, label: 'Huge' },
+  massive: { w: 40, h: 28, label: 'Massive' },
+  colossal: { w: 48, h: 34, label: 'Colossal' },
 };
+
+// Multiplayer "auto" size: roomier arenas as more tanks join.
+export function autoSize(tanks) {
+  return tanks <= 2 ? 'large' : tanks <= 4 ? 'huge' : tanks <= 6 ? 'massive' : 'colossal';
+}
 
 // Cell types
 export const EMPTY = 0;
@@ -37,7 +44,7 @@ export const PLAYER = {
   shellSpeed: 11.5,
   bounces: 1,
   maxShells: 5,
-  cooldown: 0.24,
+  cooldown: 1.0,
   maxMines: 2,
 };
 
@@ -62,11 +69,11 @@ export const BOTS = {
     speed: 3.3, turretTurn: 2.3, maxShells: 3, cooldown: 1.05, aimError: 0.045, reaction: 0.42,
     bank: 1, lead: 0.5, dodge: 0.45, maxMines: 1, mineRate: 0.03 },
   veteran: { ...base, name: 'VETERAN', model: 'heavy', paint: 0x3b3f52,
-    speed: 3.9, hullTurn: 2.8, turretTurn: 3.2, shellSpeed: 12.5, bounces: 2, maxShells: 4, cooldown: 0.72,
+    speed: 3.9, hullTurn: 2.8, turretTurn: 3.2, shellSpeed: 12.5, bounces: 2, maxShells: 4, cooldown: 1.0,
     aimError: 0.022, reaction: 0.26, bank: 2, lead: 0.85, dodge: 0.78, shootDown: true,
     maxMines: 2, mineRate: 0.05, aimInterval: 0.2, preferDist: 10, aggression: 0.65 },
   ace: { ...base, name: 'ACE', model: 'heavy', paint: 0x1c1d22,
-    speed: 4.4, hullTurn: 3.2, turretTurn: 4.2, shellSpeed: 18, bounces: 1, maxShells: 5, cooldown: 0.5,
+    speed: 4.4, hullTurn: 3.2, turretTurn: 4.2, shellSpeed: 18, bounces: 1, maxShells: 5, cooldown: 0.95,
     aimError: 0.01, reaction: 0.14, bank: 1, lead: 1, dodge: 0.95, shootDown: true,
     maxMines: 2, mineRate: 0.07, aimInterval: 0.14, preferDist: 9, aggression: 0.85 },
 };
@@ -91,7 +98,7 @@ export function gauntletBot(level) {
   if (extra > 0) {           // past the list: keep sharpening the ace
     b.name = `ACE MK ${extra + 1}`;
     b.speed = Math.min(5.2, b.speed + extra * 0.15);
-    b.cooldown = Math.max(0.3, b.cooldown - extra * 0.04);
+    b.cooldown = Math.max(0.8, b.cooldown - extra * 0.02);
     b.reaction = Math.max(0.08, b.reaction - extra * 0.01);
   }
   return b;

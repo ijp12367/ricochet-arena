@@ -183,9 +183,12 @@
   .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .ghost { padding: 13px; border: 1px solid var(--line-strong); background: transparent; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; clip-path: var(--chamfer); }
   .ghost:hover { background: rgba(235, 228, 210, 0.08); }
-  .btns .cta { font-size: var(--step-1); padding: 13px; }
+  .btns .cta { font-size: var(--step-0); letter-spacing: 0.06em; padding: 13px 8px; }
+  .btns .ghost { padding-inline: 8px; }
   #results-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0; }
-  #results-stats div { padding: 10px 12px; border: 1px solid var(--line); }
+  #results-stats div { padding: 10px 12px; border: 1px solid var(--line); min-width: 0; }
+  #results-stats div.me { border-color: var(--accent); }
+  #results-stats dt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #results-stats dt { font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
   #results-stats dd { margin: 2px 0 0; font-family: var(--font-display); font-size: var(--step-2); font-variant-numeric: tabular-nums; }
 
@@ -262,6 +265,27 @@
   .mp-only { display: none; }
   body.in-mp .mp-only { display: block; }
 
+  .seg.grid3 { grid-auto-flow: row; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .seg.grid3 button { border-bottom: 1px solid var(--line); }
+  .seg.grid3 button:nth-child(3n) { border-right: 0; }
+  .seg.grid3 button:nth-last-child(-n + 3) { border-bottom: 0; }
+
+  .tally.ffa { grid-template-columns: auto; min-width: 0; }
+  .tally.ffa .side { display: none; }
+  #board { position: absolute; left: calc(env(safe-area-inset-left, 0px) + 18px); top: calc(env(safe-area-inset-top, 0px) + 14px); width: 230px; padding: 10px 12px; background: var(--panel); border: 1px solid var(--line); clip-path: var(--chamfer); display: grid; gap: 6px; }
+  #board-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; }
+  #board-list li { display: grid; grid-template-columns: 1.4em auto minmax(0, 1fr) auto; align-items: center; gap: 8px; font-weight: 700; }
+  #board-list .rk { color: var(--muted); font-variant-numeric: tabular-nums; }
+  #board-list .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #board-list b { font-family: var(--font-display); font-weight: 400; font-variant-numeric: tabular-nums; }
+  #board-list li.me { color: var(--accent); }
+  #board-list li.down .nm { opacity: 0.5; text-decoration: line-through; }
+  #spectate { position: absolute; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 26px); transform: translateX(-50%); display: grid; justify-items: center; gap: 2px; padding: 10px 22px; background: var(--panel); border: 1px solid var(--line-strong); clip-path: var(--chamfer); text-align: center; }
+  #spectate-name { font-family: var(--font-display); font-weight: 400; font-size: var(--step-2); letter-spacing: 0.04em; }
+  #spectate-hint { color: var(--muted); font-size: var(--step--1); }
+  body.spectating #crosshair, body.spectating .hud-ammo, body.spectating .hud-hull, body.spectating #threats { display: none; }
+  @media (max-width: 640px) { #board { width: 180px; top: calc(env(safe-area-inset-top, 0px) + 74px); } }
+
   /* ---------- touch ---------- */
   #touch-ui { position: fixed; inset: 0; z-index: 6; pointer-events: none; }
   #touch-ui > * { pointer-events: auto; position: absolute; touch-action: none; }
@@ -333,11 +357,13 @@
 
     <div class="group">
       <span class="label">Arena size</span>
-      <div class="seg" role="group" aria-label="Arena size">
+      <div class="seg grid3" role="group" aria-label="Arena size">
         <button type="button" data-size="small">Small</button>
         <button type="button" data-size="medium">Medium</button>
         <button type="button" data-size="large">Large</button>
         <button type="button" data-size="huge">Huge</button>
+        <button type="button" data-size="massive">Massive</button>
+        <button type="button" data-size="colossal">Colossal</button>
       </div>
     </div>
 
@@ -405,6 +431,17 @@
   </div>
   <div id="threats"></div>
   <div id="marks"></div>
+
+  <div id="board" hidden>
+    <span class="label">Leaderboard</span>
+    <ol id="board-list"></ol>
+  </div>
+
+  <div id="spectate" hidden>
+    <span class="label">Spectating</span>
+    <b id="spectate-name"></b>
+    <span id="spectate-hint"></span>
+  </div>
 
   <div class="hud-ammo">
     <div class="ammo-row"><span class="label">Shells</span><div id="shell-pips" class="pips"></div></div>

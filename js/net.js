@@ -178,6 +178,7 @@ export class PeerTransport extends Transport {
     this.list.set(this.myId, { id: this.myId, isMe: true, state: this.me });
     if (asHost) {
       this.conns = new Map();
+      this.seen = new Map();   // peer id -> last time we heard from it
       this.outbox = [];
       this.peer.on('connection', (c) => this.accept(c));
     } else {
@@ -188,21 +189,29 @@ export class PeerTransport extends Transport {
         this.peer.on('error', (e) => { clearTimeout(t); bad(new Error(e.type === 'peer-unavailable' ? 'No lobby found with that code' : 'Connection failed')); });
       });
       this.hostConn = c;
-      c.on('data', (m) => this.fromHost(m));
-      c.on('close', () => { this.dead = true; this.list = new Map([[this.myId, this.list.get(this.myId)]]); this.changed(); });
+      this.hostSeen = performance.now();
+      c.on('data', (m) => { this.hostSeen = performance.now(); this.fromHost(m); });
+      c.on('close', () => this.lostHost());
       c.send({ t: 'full', state: this.me });
     }
+    this.lastBeat = 0;
     this.timer = setInterval(() => this.tick(), 50);
+    // closing or reloading the tab hangs up at once instead of leaving a frozen tank behind
+    this.onUnload = () => { try { this.peer.destroy(); } catch { /* already gone */ } };
+    addEventListener('pagehide', this.onUnload);
   }
 
   accept(c) {
     c.on('open', () => {
       this.conns.set(c.peer, c);
+      this.seen.set(c.peer, performance.now());
       const all = [...this.list.values()].map((p) => ({ id: p.id, state: p.isMe ? this.me : p.state }));
       c.send({ t: 'all', peers: all });
     });
     c.on('data', (m) => {
       if (!m || typeof m !== 'object') return;
+      this.seen.set(c.peer, performance.now());
+      if (m.t === 'hb') return;
       const p = this.list.get(c.peer) || { id: c.peer, isMe: false, state: {} };
       if (m.t === 'full') p.state = { ...m.state };
       else if (m.t === 'p') p.state = merge({ ...p.state }, m.patch || {});
@@ -211,19 +220,30 @@ export class PeerTransport extends Transport {
       this.outbox.push({ id: c.peer, patch: m.t === 'full' ? m.state : m.patch, full: m.t === 'full' });
       this.changed();
     });
-    const drop = () => {
-      if (!this.conns.has(c.peer)) return;
-      this.conns.delete(c.peer);
-      this.list.delete(c.peer);
-      for (const o of this.conns.values()) o.send({ t: 'bye', id: c.peer });
-      this.changed();
-    };
-    c.on('close', drop);
-    c.on('error', drop);
+    c.on('close', () => this.dropConn(c.peer));
+    c.on('error', () => this.dropConn(c.peer));
+  }
+
+  dropConn(id) {
+    const c = this.conns.get(id);
+    if (!c) return;
+    this.conns.delete(id);
+    this.seen.delete(id);
+    this.list.delete(id);
+    try { c.close(); } catch { /* already closed */ }
+    for (const o of this.conns.values()) if (o.open) o.send({ t: 'bye', id });
+    this.changed();
+  }
+
+  lostHost() {
+    if (this.dead) return;
+    this.dead = true;
+    this.list = new Map([[this.myId, this.list.get(this.myId)]]);
+    this.changed();
   }
 
   fromHost(m) {
-    if (!m || typeof m !== 'object') return;
+    if (!m || typeof m !== 'object' || m.t === 'hb') return;
     if (m.t === 'all') {
       for (const q of m.peers) if (q.id !== this.myId) this.list.set(q.id, { id: q.id, isMe: false, state: { ...q.state } });
     } else if (m.t === 'u') {
@@ -242,18 +262,25 @@ export class PeerTransport extends Transport {
   tick() {
     const now = performance.now();
     const has = Object.keys(this.pending).length > 0;
+    const beat = now - this.lastBeat > 1000;
+    if (beat) this.lastBeat = now;
     if (this.isHost) {
       if (has) this.outbox.push({ id: this.myId, patch: this.pending, full: false });
-      if (this.outbox.length) {
-        for (const [id, c] of this.conns) {
-          const items = this.outbox.filter((u) => u.id !== id);
-          if (items.length && c.open) c.send({ t: 'u', items });
-        }
-        this.outbox = [];
+      for (const [id, c] of this.conns) {
+        // a player we have not heard from for 5 s is gone, whatever the connection claims
+        if (now - (this.seen.get(id) || 0) > 5000) { this.dropConn(id); continue; }
+        const items = this.outbox.filter((u) => u.id !== id);
+        if (!c.open) continue;
+        if (items.length) c.send({ t: 'u', items });
+        else if (beat) c.send({ t: 'hb' });
       }
-    } else if ((has || now - this.lastSend > 1000) && this.hostConn && this.hostConn.open) {
-      this.hostConn.send({ t: 'p', patch: this.pending });
-      this.lastSend = now;
+      this.outbox = [];
+    } else if (this.hostConn && !this.dead) {
+      if (now - this.hostSeen > 6000) this.lostHost();
+      else if (this.hostConn.open) {
+        if (has) { this.hostConn.send({ t: 'p', patch: this.pending }); this.lastSend = now; }
+        else if (now - this.lastSend > 1000) { this.hostConn.send({ t: 'hb' }); this.lastSend = now; }
+      }
     }
     if (has) this.pending = {};
   }
@@ -262,6 +289,7 @@ export class PeerTransport extends Transport {
 
   async close() {
     clearInterval(this.timer);
+    removeEventListener('pagehide', this.onUnload);
     try { this.peer.destroy(); } catch { /* already gone */ }
   }
 }
