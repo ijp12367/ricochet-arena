@@ -2,6 +2,11 @@ RICOCHET ARENA
 First-person tank battles on a freshly generated arena every round.
 Play solo against bots, or online with up to 8 tanks (friends plus bots).
 
+PLAY IN YOUR BROWSER, NOTHING TO INSTALL
+  https://ijp12367.github.io/ricochet-arena/
+  Send that link to friends. Create a lobby, press "Copy invite link", and send that too:
+  it drops them straight into your lobby.
+
 
 HOW TO START
   Double-click Play.bat. A small local web server starts and your browser opens the game.
@@ -50,9 +55,9 @@ PLAYING WITH FRIENDS
   The host's game runs the match. If the host leaves, the match ends for everyone.
   Minimising the host's window is fine; closing it is not.
 
-  There are three ways to get your friends in:
+  There are three ways to get your friends in (option 3, the website, is the easiest):
 
-  1) The claude.ai link (easiest)
+  1) The claude.ai link
      The hosted copy of the game lives at a private claude.ai link. Open it, press
      "Share" on that page and invite your friends by email. They sign in to claude.ai
      (a free account works) and open the same link.
@@ -68,11 +73,16 @@ PLAYING WITH FRIENDS
      Strict networks (some school, office or mobile connections) can block peer-to-peer
      connections. If a friend can't join, try a different network.
 
-  3) Your own website (a link is all anyone needs)
-     This folder is a complete static website. Upload it to any static host (for example
-     an itch.io HTML game, Netlify Drop or GitHub Pages) and open the site there.
+  3) The website (a link is all anyone needs)
+     The game is published free on GitHub Pages: https://ijp12367.github.io/ricochet-arena/
      Multiplayer works peer-to-peer like option 2, and "Copy invite link" gives you a link
-     that drops friends straight into your lobby. No accounts are needed to play.
+     that drops friends straight into your lobby. No accounts or downloads needed to play.
+     This folder is that website's repository (github.com/ijp12367/ricochet-arena). To update
+     the site after changing files, run in this folder:
+       git add -A
+       git commit -m "Describe the change"
+       git push
+     GitHub republishes it within a minute or two.
 
 
 LOBBY SETTINGS (host)

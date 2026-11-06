@@ -53,7 +53,12 @@ export class MpUi {
       return (this.net = { kind: 'room', note: 'Online through claude.ai. Friends must be signed in and invited to this page from its Share menu.' });
     }
     if (window.RICOCHET_PACKED) return (this.net = { kind: 'none', note: 'Multiplayer on this page needs you to be signed in to claude.ai and invited to the game. Ask the owner to share it with you.' });
-    if (PeerTransport.supported()) return (this.net = { kind: 'peer', note: 'Peer-to-peer over the internet. Each friend opens their own copy of the game and joins with your code.' });
+    if (PeerTransport.supported()) {
+      const local = location.protocol === 'file:' || /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+      return (this.net = { kind: 'peer', note: local
+        ? 'Peer-to-peer over the internet. Each friend runs their own copy of the game (Play.bat) and joins with your code.'
+        : 'Online, peer-to-peer. Friends open this page and join with your code or an invite link. Nothing to install.' });
+    }
     return (this.net = { kind: 'none', note: 'This browser cannot make peer-to-peer connections.' });
   }
 
